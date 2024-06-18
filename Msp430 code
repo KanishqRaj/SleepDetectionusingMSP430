@@ -1,0 +1,81 @@
+
+#include <msp430.h>
+
+#define blinkPin BIT2 // P1.2
+#define buzzerPin BIT4 // P1.4
+
+volatile long time = 0;
+volatile long closedStartTime = 0;
+volatile int eyeClosed = 0;
+volatile int buzzerOn = 0;
+
+void setup() 
+{
+    WDTCTL = WDTPW | WDTHOLD;   // Stop watchdog timer
+    P1DIR |= buzzerPin;         // Set buzzerPin as output
+    P1DIR &= ~blinkPin;         // Set blinkPin as input
+    P1OUT |= blinkPin;          // Set pull-up resistor
+    P1REN |= blinkPin;          // Enable pull-up resistor on blinkPin
+
+    // Configure Timer_A
+    TA0CCTL0 = CCIE;           // Enable interrupt for CCR0
+    TA0CCR0 = 1000;             // Set CCR0 value for 1ms interrupt
+    TA0CTL = TASSEL_2 + MC_1 + TACLR; // SMCLK, up mode, clear TAR
+
+    __bis_SR_register(GIE);         // Enable global interrupts
+
+}
+
+// Timer A0 interrupt service routine
+#pragma vector=TIMER0_A0_VECTOR
+__interrupt void Timer_A(void) 
+{
+    time++;
+}
+
+long millis() {
+    return time;
+}
+
+void loop() {
+    while (1) {
+        if ((P1IN & blinkPin)) { // If blinkPin is LOW (eye is closed)
+            if (!eyeClosed)
+              {
+                eyeClosed = 1;
+                closedStartTime = millis();
+            }
+            else
+           {
+                if ((millis() - closedStartTime) >= 3000) 
+                  { 
+                    // If the eye is closed for 3 seconds or more
+                    if (!buzzerOn) 
+                       {
+                        P1OUT |= buzzerPin; 
+                        buzzerOn = 1;         // Turn buzzerPin on
+                       }
+                }
+            }
+        } 
+         else {              
+           // If blinkPin is HIGH (eye is open)
+            if (eyeClosed)
+               {
+                eyeClosed = 0;
+                if (buzzerOn) 
+                   {
+                    P1OUT &= ~buzzerPin;     
+                    buzzerOn = 0;         // Turn buzzerPin off
+                }
+            }
+        }
+    }
+}
+
+int main(void)
+ {
+    setup();
+    loop();
+    return 0;
+}
